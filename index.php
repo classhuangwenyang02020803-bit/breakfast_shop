@@ -241,7 +241,7 @@
                                     </div>
                                 </template>
 
-                                <input type="text" class="form-control form-control-sm rounded-pill mb-3" v-model="p.note" placeholder="備註 (如:加辣油)">
+                                <input type="text" class="form-control form-control-sm rounded-pill mb-3" v-model="p.note" placeholder="備註">
                             </div>
 
                             <div class="mt-auto d-flex align-items-center gap-2">
