@@ -87,7 +87,7 @@ createApp({
 
         needsSugar(name) {
             // 在這裡填入「不需要」甜度選項的飲料關鍵字
-            const noSugarItems = ['奶茶']; 
+            const noSugarItems = ['奶茶', '米漿']; 
             
             // 如果飲料名字「包含」上面的字，就回傳 false (不顯示)
             return !noSugarItems.some(k => name.includes(k));
