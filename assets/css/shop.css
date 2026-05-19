@@ -1,0 +1,221 @@
+/* =========================================
+   1. 全域背景鎖定 (這部分最重要)
+   ========================================= */
+html {
+    /* 直接在最底層 html 鎖定背景圖 */
+    background: url('../images/taichung.png') no-repeat center center fixed;
+    background-size: cover;
+    height: 100%;
+}
+
+body {
+    font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: transparent !important; /* 確保 body 是透明的，才看得到底層背景 */
+    overflow-x: hidden;
+}
+
+/* 全站變數 */
+:root {
+    --glass-white: rgba(255, 255, 255, 0.88);
+    --accent-orange: #FF7043;
+    --warm-brown: #6D4C41;
+}
+
+/* =========================================
+   2. 頁面內容遮罩 (讓文字好讀，但不擋住背景)
+   ========================================= */
+/* 建立一個固定位置的半透明遮罩，它會一直待在背景圖上方 */
+.bg-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.2); /* 0.2 代表背景圖被淡化的程度 */
+    z-index: -1; /* 確保在所有內容下面 */
+    pointer-events: none;
+}
+
+/* =========================================
+   3. Hero Section (首頁大圖區)
+   ========================================= */
+.hero-section {
+    position: relative;
+    height: 100vh; /* 滿版高度 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent; /* 透明，直接露出 html 的背景 */
+    color: white;
+    text-shadow: 0 2px 15px rgba(0,0,0,0.6);
+}
+
+.hero-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.45); /* 只有這一塊會讓背景變暗，突顯店名 */
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+}
+
+/* =========================================
+   4. 內容卡片 (毛玻璃效果)
+   ========================================= */
+.product-card {
+    border: none !important;
+    border-radius: 20px;
+    background: var(--glass-white) !important; 
+    backdrop-filter: blur(15px); /* 毛玻璃模糊效果 */
+    -webkit-backdrop-filter: blur(15px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important;
+    transition: 0.3s;
+}
+
+.product-card:hover {
+    transform: translateY(-10px);
+    background: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* =========================================
+   5. 其他元件優化
+   ========================================= */
+.navbar {
+    transition: 0.3s;
+}
+
+.product-img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 20px 20px 0 0;
+}
+
+/* 優化預約資訊與查詢區塊的卡片 */
+.info-card {
+    max-width: 900px; /* 限制最大寬度，避免欄位過長 */
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 2rem !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.info-card .form-control, .info-card .form-select {
+    border: 1px solid #eee;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+}
+
+.info-card label {
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* 商品卡片優化 */
+.product-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 16px !important;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.12) !important;
+}
+
+/* 統一圖片高度並加上呼吸感 */
+.product-img-container {
+    height: 180px; 
+    padding: 10px; /* 圖片不頂格，留一點邊框 */
+}
+
+.product-img-container img {
+    border-radius: 12px;
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+}
+
+.product-card .card-body {
+    padding: 1.25rem !important;
+}
+
+.product-card .price-tag {
+    font-size: 1.2rem;
+    color: #d9534f;
+    margin-bottom: 1rem;
+}
+
+/* 全域呼吸感優化 */
+section {
+    padding: 100px 0; /* 增加上下間距，讓頁面不擁擠 */
+}
+
+/* 卡片容器：增加圓角、陰影與背景質感 */
+.info-card {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 24px; /* 更圓潤的設計 */
+    padding: 40px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05); /* 輕盈的陰影 */
+    border: 1px solid rgba(0, 0, 0, 0.02);
+}
+
+/* 欄位優化 */
+.info-card label {
+    display: block;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    padding-left: 10px;
+}
+
+.info-card .form-control, 
+.info-card .form-select {
+    border: 1px solid #eef0f2;
+    padding: 12px 20px;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+
+.info-card .form-control:focus {
+    background-color: #fff;
+    border-color: #ffc107;
+    box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.1);
+}
+
+/* 商品卡片：調整比例與高度 */
+.product-card {
+    border: none;
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: #fff;
+}
+
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+}
+
+.product-img-wrapper {
+    height: 200px;
+    overflow: hidden;
+    padding: 15px; /* 圖片不貼邊，產生呼吸感 */
+}
+
+.product-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 15px;
+}
