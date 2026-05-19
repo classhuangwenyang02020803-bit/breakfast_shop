@@ -231,7 +231,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="mb-3">
+                                    <div class="mb-3" v-if="needsSpicy(p.name)">
                                         <div class="option-group">
                                             <div class="option-item" v-for="sp in ['不辣','小辣','大辣']" :key="sp">
                                                 <input type="radio" :id="'spicy-'+sp+'-'+p.id" :value="sp" v-model="p.selectedSpicy">
@@ -241,7 +241,7 @@
                                     </div>
                                 </template>
 
-                                <input type="text" class="form-control form-control-sm rounded-pill mb-3" v-model="p.note" placeholder="備註 (如:加甜辣醬)">
+                                <input type="text" class="form-control form-control-sm rounded-pill mb-3" v-model="p.note" placeholder="備註 (如:加辣油)">
                             </div>
 
                             <div class="mt-auto d-flex align-items-center gap-2">

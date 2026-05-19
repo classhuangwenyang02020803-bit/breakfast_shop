@@ -93,6 +93,16 @@ createApp({
             return !noSugarItems.some(k => name.includes(k));
         },
 
+        // 判斷哪些餐點需要挑選辣度
+        // 目前設定：名稱包含「卡拉雞」、「鐵板麵」、「打拋肉」、「炒麵」才需要選辣度
+        needsSpicy(name) {
+            return !['皮蛋瘦肉粥'].some(k => name.includes(k));
+            
+            // 💡 小提示：您可以自由調整上面的陣列。
+            // 如果您希望「只要是主食類，除了吐司以外都要選辣度」，也可以改成排除法：
+            // return !['吐司', '厚片', '饅頭'].some(k => name.includes(k));
+        },
+
         initTimeOptions() {
             const times = [];
             for (let h = 6; h <= 10; h++) {
@@ -107,17 +117,17 @@ createApp({
         addToCart(p) {
             const currentPrice = this.calculateCurrentPrice(p);
             let options = "";
-
+            
             if (this.needsEgg(p.name)) {
-                options = `${p.selectedEgg} / ${p.selectedSpicy}`;
-            } else if (p.price_m) { // 判斷是否為飲料
-                if (this.needsSugar(p.name)) {
-                    options = `${p.selectedSize} / ${p.selectedSugar}`;
-                } else {
-                    options = `${p.selectedSize}`; // 不需要甜度時，只顯示大小杯
-                }
+                // 如果需要加蛋，再看它需不需要選辣度
+                options = this.needsSpicy(p.name) ? `${p.selectedEgg} / ${p.selectedSpicy}` : p.selectedEgg;
+            } else if (p.price_m) { 
+                // 飲料部分的邏輯（維持您剛才改好的設定）
+                options = this.needsSugar(p.name) ? `${p.selectedSize} / ${p.selectedSugar}` : p.selectedSize;
             } else {
-                options = p.selectedSpicy;
+                // 一般不需要加蛋的主食（例如：漢堡肉餅、薯條等）
+                // 如果需要選辣度就給辣度，不需要的話 options 就留空（""）
+                options = this.needsSpicy(p.name) ? p.selectedSpicy : "";
             }
 
             this.cart.push({
@@ -126,9 +136,11 @@ createApp({
                 price: currentPrice,
                 qty: p.qty,
                 subtotal: p.qty * currentPrice,
-                options: options,
+                options: options, // 這裡帶入剛剛組合好的乾淨字串
                 note: p.note
             });
+
+            // ...（下方原有的重置與 Swal 提示維持不變）
 
             // 重置該產品狀態
             p.qty = 1;
