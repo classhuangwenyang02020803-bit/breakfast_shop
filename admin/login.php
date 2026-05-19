@@ -84,7 +84,23 @@ if (isset($_POST['login'])) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        /* 讓返回按鈕在滑鼠懸停時有微微往左移動的動畫 */
+        /* 全域垂直水平置中，確保在所有尺寸的螢幕上視覺都完美平衡 */
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8f9fa;
+        }
+        
+        /* 登入卡片微調 */
+        .login-card {
+            border: none;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07) !important;
+        }
+
+        /* 返回按鈕在滑鼠懸停時往左移動的動畫 */
         .btn-back {
             transition: all 0.3s ease;
         }
@@ -94,10 +110,12 @@ if (isset($_POST['login'])) {
         }
     </style>
 </head>
-<body class="bg-light">
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-4">
+<body>
+
+<div class="container py-4">
+    <div class="row justify-content-center w-100 m-0">
+        
+        <div class="col-12 col-sm-8 col-md-6 col-lg-4">
             
             <div class="d-flex justify-content-start mb-3">
                 <a href="../index.php" class="btn btn-outline-secondary btn-sm rounded-pill px-3 shadow-sm btn-back fw-bold">
@@ -105,46 +123,53 @@ if (isset($_POST['login'])) {
                 </a>
             </div>
 
-            <div class="card shadow border-0">
-                <div class="card-body p-4">
-                    <h2 class="text-center mb-4">早餐店管理系統</h2>
+            <div class="card login-card">
+                <div class="card-body p-4 p-sm-5">
+                    
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold text-dark mb-1">管理系統</h2>
+                        <small class="text-muted">王媽媽早餐店後台維護</small>
+                    </div>
                     
                     <?php if ($error != ''): ?>
-                        <div class="alert alert-danger alert-dismissible fade show">
-                            <i class="bi bi-exclamation-triangle-fill"></i> <?php echo $error; ?>
+                        <div class="alert alert-danger alert-dismissible fade show rounded-3 small">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i> <?php echo $error; ?>
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     <?php endif; ?>
 
                     <form method="POST">
                         <div class="mb-3">
-                            <label class="form-label">登入帳號</label>
-                            <input type="text" name="username" class="form-control" placeholder="請輸入管理員或員工帳號" required>
+                            <label class="form-label fw-bold text-secondary small">登入帳號</label>
+                            <input type="text" name="username" class="form-control form-control-lg fs-6" placeholder="請輸入管理員或員工帳號" required autocomplete="username">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">登入密碼</label>
-                            <input type="password" name="password" class="form-control" placeholder="請輸入密碼" required>
+                            <label class="form-label fw-bold text-secondary small">登入密碼</label>
+                            <input type="password" name="password" class="form-control form-control-lg fs-6" placeholder="請輸入密碼" required autocomplete="current-password">
                         </div>
                         
-                        <div class="form-check mb-4 mt-2">
+                        <div class="form-check mb-4 mt-3">
                             <input class="form-check-input" type="checkbox" name="remember" id="remember" value="1">
                             <label class="form-check-label text-muted small" for="remember">
                                 此裝置保持登入 30 天
                             </label>
                         </div>
 
-                        <button type="submit" name="login" class="btn btn-dark w-100 py-2">
+                        <button type="submit" name="login" class="btn btn-dark w-100 py-2.5 fw-bold rounded-3 shadow-sm fs-5">
                             確認登入
                         </button>
                     </form>
                 </div>
             </div>
-            <div class="text-center mt-3 text-muted">
-                <small>系統偵測：管理員與一般帳號均可由此登入</small>
+
+            <div class="text-center mt-4 text-secondary">
+                <small style="font-size: 0.8rem;"><i class="bi bi-info-circle me-1"></i>系統提示：管理員與一般員工帳號均由此入口驗證</small>
             </div>
+            
         </div>
     </div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
