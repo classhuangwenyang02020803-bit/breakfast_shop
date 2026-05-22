@@ -1,10 +1,23 @@
 <?php
-require_once 'auth.php';
-require_once '../api/db.php';
 
-// 💡 建立檢查是不是最高管理員的變數
+require_once 'auth.php';
+require_once '../api/db.php'; // 確保有引入資料庫連線
+
+// 🔒 建立檢查是不是最高管理員的變數
 $isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
 
+// 🧹 【新增功能】：每個月歷史舊訂單自動大掃除機制
+// 只要老闆或員工登入進入後台儀表板，系統就會自動執行這段指令
+$thirty_days_ago = date('Y-m-d', strtotime('-30 days')); // 計算出 30 天前的日期
+
+// 1. 先清除 order_detail (訂單明細表) 裡面超過 30 天的舊資料
+$conn->query("DELETE FROM order_detail WHERE order_no IN (SELECT order_no FROM order_master WHERE pickup_date < '$thirty_days_ago')");
+
+// 2. 再清除 order_master (訂單主表) 裡面超過 30 天的舊資料
+$conn->query("DELETE FROM order_master WHERE pickup_date < '$thirty_days_ago'");
+
+// -----------------------------------------------------------------
+// 以下是你原本就有的營收統計與利潤計算代碼（維持不動）
 $month_total = 0;
 $month_profit = 0;
 

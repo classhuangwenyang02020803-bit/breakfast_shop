@@ -86,22 +86,18 @@ createApp({
             return ['蔥油餅', '韭菜盒', '大餅', '饅頭'].some(k => name.includes(k));
         },
 
+        // 🌟 【邏輯大腦修正】：精準控制哪些飲料才需要選糖度
         needsSugar(name) {
-            // 在這裡填入「不需要」甜度選項的飲料關鍵字
-            const noSugarItems = ['奶茶', '米漿']; 
+            // 指定只有這些需要調配糖度的關鍵字，才會回傳 true
+            const sweetDrinks = ['紅茶', '豆漿']; 
             
-            // 如果飲料名字「包含」上面的字，就回傳 false (不顯示)
-            return !noSugarItems.some(k => name.includes(k));
+            // 只要飲料名字包含上面任何一個關鍵字，就會顯示糖度選單
+            return sweetDrinks.some(k => name.includes(k));
         },
 
         // 判斷哪些餐點需要挑選辣度
-        // 目前設定：名稱包含「卡拉雞」、「鐵板麵」、「打拋肉」、「炒麵」才需要選辣度
         needsSpicy(name) {
-            return !['皮蛋瘦肉粥', '甜燒餅'].some(k => name.includes(k));
-            
-            // 💡 小提示：您可以自由調整上面的陣列。
-            // 如果您希望「只要是主食類，除了吐司以外都要選辣度」，也可以改成排除法：
-            // return !['吐司', '厚片', '饅頭'].some(k => name.includes(k));
+            return !['皮蛋瘦肉粥', '甜燒餅', '荷包蛋(顆)'].some(k => name.includes(k));
         },
 
         initTimeOptions() {
@@ -120,14 +116,11 @@ createApp({
             let options = "";
             
             if (this.needsEgg(p.name)) {
-                // 如果需要加蛋，再看它需不需要選辣度
                 options = this.needsSpicy(p.name) ? `${p.selectedEgg} / ${p.selectedSpicy}` : p.selectedEgg;
-            } else if (p.price_m) { 
-                // 飲料部分的邏輯（維持您剛才改好的設定）
+            } else if (p.price_m || this.filteredProducts('drink').some(d => d.name === p.name)) { 
+                // 飲料部分的邏輯：根據最新的 needsSugar 判斷是否要組合糖度文字
                 options = this.needsSugar(p.name) ? `${p.selectedSize} / ${p.selectedSugar}` : p.selectedSize;
             } else {
-                // 一般不需要加蛋的主食（例如：漢堡肉餅、薯條等）
-                // 如果需要選辣度就給辣度，不需要的話 options 就留空（""）
                 options = this.needsSpicy(p.name) ? p.selectedSpicy : "";
             }
 
@@ -137,11 +130,9 @@ createApp({
                 price: currentPrice,
                 qty: p.qty,
                 subtotal: p.qty * currentPrice,
-                options: options, // 這裡帶入剛剛組合好的乾淨字串
+                options: options,
                 note: p.note
             });
-
-            // ...（下方原有的重置與 Swal 提示維持不變）
 
             // 重置該產品狀態
             p.qty = 1;
@@ -160,7 +151,6 @@ createApp({
         scrollToCategory(id) {
             const el = document.getElementById(id);
             if (el) el.scrollIntoView({ behavior: 'smooth' });
-            // 收起手機選單
             const nav = document.getElementById('mainNav');
             if (nav.classList.contains('show')) {
                 bootstrap.Collapse.getInstance(nav).hide();
@@ -173,7 +163,6 @@ createApp({
 
         closeNavbar() {
             const nav = document.getElementById('mainNav');
-            // 如果漢堡選單是展開的狀態，就把它收起來
             if (nav && nav.classList.contains('show')) {
                 bootstrap.Collapse.getInstance(nav).hide();
             }
@@ -195,13 +184,11 @@ createApp({
                 });
                 const result = await res.json();
                 if (result.success) {
-                    // 1. 處理電話隱碼邏輯：只顯示後三碼，前面用 * 代替（例如：*******123）
                     const rawPhone = this.custInfo.phone || "";
                     const maskedPhone = rawPhone.length > 3 
                         ? "*".repeat(rawPhone.length - 3) + rawPhone.slice(-3) 
                         : rawPhone;
 
-                    // 2. 組合餐點明細的文字列表（白話條列）
                     let itemsHtml = '<ul class="text-start list-unstyled ps-3 bg-light p-3 rounded-3 border small" style="line-height:1.6; color:#475569;">';
                     this.cart.forEach(item => {
                         itemsHtml += `
@@ -213,7 +200,6 @@ createApp({
                     });
                     itemsHtml += '</ul>';
 
-                    // 3. 彈出超漂亮的完整訂單資訊跳窗
                     Swal.fire({
                         title: '🎉 預約成功！',
                         icon: 'success',
@@ -232,10 +218,10 @@ createApp({
                             </div>
                         `,
                         confirmButtonText: '確定並關閉',
-                        confirmButtonColor: '#ff9800', // 使用王媽媽經典暖橘色按鈕
-                        allowOutsideClick: false // 防止客人手滑點到旁邊關掉
+                        confirmButtonColor: '#ff9800',
+                        allowOutsideClick: false
                     }).then(() => {
-                        location.reload(); // 點擊確定後刷新網頁清空購物車
+                        location.reload();
                     });
                 }
             } catch (err) {
@@ -262,23 +248,17 @@ createApp({
         this.fetchProducts();
         this.initTimeOptions();
 
-        // 🌟 新增：獲取本地時間的今天日期 (格式必須為 YYYY-MM-DD 才能被 HTML5 認得)
         const today = new Date();
         const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, '0'); // 月份從0開始算要+1
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
         const dd = String(today.getDate()).padStart(2, '0');
         
-        this.todayDate = `${yyyy}-${mm}-${dd}`; // 組合出 "2026-05-22"
-        
-        // 自動幫客人的預約日期預設為今天，體驗更好
+        this.todayDate = `${yyyy}-${mm}-${dd}`;
         this.custInfo.date = this.todayDate;
         
-        // 新增：點擊網頁空白處，自動收起漢堡選單
         document.addEventListener('click', (e) => {
             const nav = document.getElementById('mainNav');
             const toggler = document.querySelector('.navbar-toggler');
-            
-            // 確保元素存在，且如果選單是開啟的，但點擊的地方「不是」選單內部，也「不是」漢堡按鈕本身
             if (nav && toggler && nav.classList.contains('show') && !nav.contains(e.target) && !toggler.contains(e.target)) {
                 this.closeNavbar();
             }
