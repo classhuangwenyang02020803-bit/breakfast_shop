@@ -397,7 +397,14 @@
                                 <span class="text-danger fw-bold">${{ o.total_price }}</span>
                             </div>
                             <div class="small fw-bold mb-2"><i class="bi bi-clock me-1"></i>{{ o.pickup_date }} {{ o.pickup_time }}</div>
-                            <span class="badge bg-success mb-2">{{ o.status }}</span>
+                            
+                            <div class="mb-2">
+                                <span v-if="o.status === '待處理'" class="badge bg-warning rounded-pill px-3"><i class="bi bi-hourglass-split me-1"></i>🍳 備餐中，請稍候</span>
+                                <span v-else-if="o.status === '已完成'" class="badge bg-success rounded-pill px-3"><i class="bi bi-bag-check-fill me-1"></i>🎉 已完成！請憑單取餐</span>
+                                <span v-else-if="o.status === '已取消'" class="badge bg-danger rounded-pill px-3"><i class="bi bi-x-circle-fill me-1"></i>❌ 訂單已取消</span>
+                                <span v-else class="badge bg-warning text-dark rounded-pill px-3">{{ o.status }}</span>
+                            </div>
+
                             <div class="bg-light p-2 rounded small">
                                 <div v-for="d in o.details">• {{ d.product_name }} x{{ d.quantity }}</div>
                             </div>
