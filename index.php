@@ -292,7 +292,7 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="small text-muted mb-1">取餐日期</label>
-                                <input type="date" v-model="custInfo.date" class="form-control rounded-pill">
+                                <input type="date" v-model="custInfo.date" :min="todayDate" class="form-control rounded-pill px-3">
                             </div>
                             <div class="col-md-3">
                                 <label class="small text-muted mb-1">時間</label>

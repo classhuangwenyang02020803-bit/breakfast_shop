@@ -16,6 +16,16 @@ if (!$data || empty($data['items'])) {
 $customer = $data['customer'];
 $items = $data['items'];
 
+// 🌟 【核心修正：寫在這裡！】新增後端安全鎖：檢查預約取餐日期是否小於今天
+$today = date("Y-m-d");
+if ($customer['date'] < $today) {
+    echo json_encode([
+        'success' => false, 
+        'message' => '預約取餐日期不能是過去的時間喔！'
+    ]);
+    exit;
+}
+
 // 計算總金額
 $total = 0;
 foreach ($items as $item) {

@@ -19,6 +19,7 @@ createApp({
                 date: new Date().toISOString().slice(0, 10),
                 time: ''
             },
+            todayDate: '', // 🌟 新增：用來存放今天日期的限制變數
             timeOptions: [],
 
             // 訂單查詢資料
@@ -194,8 +195,47 @@ createApp({
                 });
                 const result = await res.json();
                 if (result.success) {
-                    Swal.fire('🎉 預約成功！', `您的單號：${result.order_no}`, 'success').then(() => {
-                        location.reload();
+                    // 1. 處理電話隱碼邏輯：只顯示後三碼，前面用 * 代替（例如：*******123）
+                    const rawPhone = this.custInfo.phone || "";
+                    const maskedPhone = rawPhone.length > 3 
+                        ? "*".repeat(rawPhone.length - 3) + rawPhone.slice(-3) 
+                        : rawPhone;
+
+                    // 2. 組合餐點明細的文字列表（白話條列）
+                    let itemsHtml = '<ul class="text-start list-unstyled ps-3 bg-light p-3 rounded-3 border small" style="line-height:1.6; color:#475569;">';
+                    this.cart.forEach(item => {
+                        itemsHtml += `
+                            <li class="mb-1 border-bottom border-white pb-1">
+                                🍕 <span class="fw-bold text-dark">${item.name}</span> 
+                                <span class="text-danger fw-bold">x${item.qty}</span> 
+                                <br><small class="text-muted">(${item.options})</small>
+                            </li>`;
+                    });
+                    itemsHtml += '</ul>';
+
+                    // 3. 彈出超漂亮的完整訂單資訊跳窗
+                    Swal.fire({
+                        title: '🎉 預約成功！',
+                        icon: 'success',
+                        html: `
+                            <div class="text-start px-2 text-dark">
+                                <p class="mb-2 fs-5">謝謝您的訂購！請截圖此畫面至現場取餐：</p>
+                                <div class="p-3 mb-3 rounded-3" style="background-color: #fff8f0; border: 1px solid #ffe0b2;">
+                                    <div class="mb-1"><strong>📌 取餐單號：</strong> <span class="text-danger fw-bold fs-5">${result.order_no}</span></div>
+                                    <div class="mb-1"><strong>👤 客戶姓名：</strong> ${this.custInfo.name}</div>
+                                    <div class="mb-1"><strong>📞 聯絡電話：</strong> ${maskedPhone}</div>
+                                    <div class="mb-1"><strong>⏰ 取餐時間：</strong> <span class="badge bg-warning text-dark">${this.custInfo.date} ${this.custInfo.time}</span></div>
+                                </div>
+                                <p class="mb-2 fw-bold"><i class="bi bi-list-check me-1 text-warning"></i>訂單內容明細：</p>
+                                ${itemsHtml}
+                                <p class="text-end text-danger fw-bold fs-5 mt-2">總計金額：$${this.cartTotal} 元</p>
+                            </div>
+                        `,
+                        confirmButtonText: '確定並關閉',
+                        confirmButtonColor: '#ff9800', // 使用王媽媽經典暖橘色按鈕
+                        allowOutsideClick: false // 防止客人手滑點到旁邊關掉
+                    }).then(() => {
+                        location.reload(); // 點擊確定後刷新網頁清空購物車
                     });
                 }
             } catch (err) {
@@ -221,6 +261,17 @@ createApp({
     mounted() {
         this.fetchProducts();
         this.initTimeOptions();
+
+        // 🌟 新增：獲取本地時間的今天日期 (格式必須為 YYYY-MM-DD 才能被 HTML5 認得)
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0'); // 月份從0開始算要+1
+        const dd = String(today.getDate()).padStart(2, '0');
+        
+        this.todayDate = `${yyyy}-${mm}-${dd}`; // 組合出 "2026-05-22"
+        
+        // 自動幫客人的預約日期預設為今天，體驗更好
+        this.custInfo.date = this.todayDate;
         
         // 新增：點擊網頁空白處，自動收起漢堡選單
         document.addEventListener('click', (e) => {
