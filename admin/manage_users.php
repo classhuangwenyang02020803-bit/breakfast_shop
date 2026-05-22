@@ -2,8 +2,21 @@
 require_once 'auth.php';
 require_once '../api/db.php';
 
+// 💡 建立一個快速檢查是不是最高管理員的變數（對應你改好的 auth.php）
+$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+
 // 處理刪除請求
 if (isset($_GET['delete'])) {
+    
+    // 🔒 后端安全鎖：如果不是最高管理員，直接拒絕刪除並跳出警告
+    if (!$isAdmin) {
+        echo "<script>
+            alert('【安全警告】您的權限不足！只有最高管理員(Admin)才能刪除帳號。');
+            window.location.href = 'manage_users.php';
+        </script>";
+        exit;
+    }
+
     $delete_id = intval($_GET['delete']);
     
     // 關鍵修正：指向 users 表
@@ -90,11 +103,14 @@ while ($row = $result->fetch_assoc()) {
 <div class="container py-4">
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <h2 class="m-0 fs-3"><i class="bi bi-people-fill text-primary me-2"></i>帳號管理</h2>
+        
+        <?php if ($isAdmin): ?>
         <div>
             <a href="user_create.php" class="btn btn-primary shadow-sm rounded-pill px-4 w-100 w-md-auto">
                 <i class="bi bi-person-plus me-1"></i> 新增帳號
             </a>
         </div>
+        <?php endif; ?>
     </div>
 
     <div class="card shadow border-0 w-100">
@@ -104,7 +120,9 @@ while ($row = $result->fetch_assoc()) {
                 <div class="text-center py-5">
                     <i class="bi bi-person-x text-muted" style="font-size: 4rem;"></i>
                     <h5 class="mt-3 text-secondary">目前還沒有一般帳號</h5>
-                    <p class="text-muted small">點擊上方的「新增帳號」按鈕來建立第一個使用者吧！</p>
+                    <?php if ($isAdmin): ?>
+                        <p class="text-muted small">點擊上方的「新增帳號」按鈕來建立第一個使用者吧！</p>
+                    <?php endif; ?>
                 </div>
             <?php else: ?>
                 <div class="table-responsive border-0">
@@ -114,7 +132,10 @@ while ($row = $result->fetch_assoc()) {
                                 <th>ID</th>
                                 <th>帳號名稱</th>
                                 <th>建立時間</th>
-                                <th class="text-center">操作</th>
+                                
+                                <?php if ($isAdmin): ?>
+                                    <th class="text-center">操作</th>
+                                <?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -127,11 +148,14 @@ while ($row = $result->fetch_assoc()) {
                                 <td data-label="建立時間">
                                     <span class="text-muted small"><?php echo date('Y/m/d H:i', strtotime($row['created_at'])); ?></span>
                                 </td>
+                                
+                                <?php if ($isAdmin): ?>
                                 <td class="text-center action-cell">
                                     <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-outline-danger btn-sm rounded-pill px-4 fw-bold w-100 w-md-auto" onclick="return confirm('確定要刪除此帳號嗎？')">
                                         <i class="bi bi-trash"></i> 刪除
                                     </a>
                                 </td>
+                                <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>

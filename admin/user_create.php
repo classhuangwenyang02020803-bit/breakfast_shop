@@ -2,10 +2,19 @@
 session_start();
 require_once '../api/db.php';
 
-// 權限檢查
+// 🔒 權限核心鎖 1：如果根本沒登入，先踢回登入頁
 if (!isset($_SESSION['admin'])) {
     header('Location: login.php');
     exit;
+}
+
+// 🔒 權限核心鎖 2：雖然登入了，但如果「身份不是 admin」，立刻彈出警告並踢回儀表板！
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    echo "<script>
+        alert('【安全警告】您的權限不足！只有最高管理員(Admin)才能建立新帳號。');
+        window.location.href = 'dashboard.php';
+    </script>";
+    exit; // 強制切斷，不讓一般員工看到下方的表單，也不讓他們提交資料
 }
 
 $message = '';
