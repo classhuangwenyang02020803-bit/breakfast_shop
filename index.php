@@ -399,7 +399,7 @@
                             <div class="small fw-bold mb-2"><i class="bi bi-clock me-1"></i>{{ o.pickup_date }} {{ o.pickup_time }}</div>
                             
                             <div class="mb-2">
-                                <span v-if="o.status === '待處理'" class="badge bg-secondary rounded-pill px-3"><i class="bi bi-hourglass-split me-1"></i>⏳ 待店家接單</span>
+                                <span v-if="o.status === '待處理'" class="badge bg-secondary rounded-pill px-3"><i class="bi bi-hourglass-split me-1"></i>⏳ 待處理</span>
                                 <span v-else-if="o.status === '已完成'" class="badge bg-success rounded-pill px-3"><i class="bi bi-bag-check-fill me-1"></i>🎉 已完成！請憑單取餐</span>
                                 <span v-else-if="o.status === '已取消'" class="badge bg-danger rounded-pill px-3"><i class="bi bi-x-circle-fill me-1"></i>❌ 訂單已取消</span>
                                 <span v-else class="badge bg-warning text-dark rounded-pill px-3">{{ o.status }}</span>
