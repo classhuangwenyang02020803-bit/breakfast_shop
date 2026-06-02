@@ -2,12 +2,26 @@
 require_once 'auth.php';
 require_once '../api/db.php';
 
+// 🌟 【大數據效能優化】：設定每頁顯示筆數，並動態取得當前頁碼
+$limit = 20; 
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit; 
+
+// 📊 撈取當前總訂單筆數，用來精確計算分頁總數
+$total_query = $conn->query("SELECT COUNT(*) as total FROM order_master");
+$total_row = $total_query->fetch_assoc();
+$total_records = $total_row['total'];
+$total_pages = ceil($total_records / $limit);
+
+// ⚡ 高效能 SQL 分頁查詢
 $result = $conn->query(
     "SELECT m.*, 
     (SELECT GROUP_CONCAT(CONCAT('• <span class=\"fw-bold text-dark fs-6\">', product_name, '</span> <span class=\"text-danger fw-bold fs-6 ms-1\">x', quantity, '</span> <small class=\"text-secondary ms-1\">(', options, ')</small>') SEPARATOR '<br>') 
      FROM order_detail d WHERE d.order_no = m.order_no) as item_details
     FROM order_master m 
-    ORDER BY m.id DESC"
+    ORDER BY m.id DESC 
+    LIMIT $limit OFFSET $offset"
 );
 ?>
 
@@ -32,11 +46,9 @@ $result = $conn->query(
 
         /* ----- 平板與手機版表格轉卡片完美適應 CSS (斷點上調至 991.98px) ----- */
         @media (max-width: 991.98px) {
-            /* 隱藏外層多餘的捲軸設定 */
             .table-responsive {
                 overflow-x: hidden;
             }
-            /* 將表格元素轉為區塊顯示 */
             .mobile-card-table,
             .mobile-card-table tbody,
             .mobile-card-table tr,
@@ -44,11 +56,9 @@ $result = $conn->query(
                 display: block;
                 width: 100%;
             }
-            /* 在手機版/平板隱藏表格頂部標題 */
             .mobile-card-table thead {
                 display: none; 
             }
-            /* 每一個 tr 變成一張獨立的卡片 */
             .mobile-card-table tr {
                 margin-bottom: 1.5rem;
                 border: 1px solid #e0e0e0 !important;
@@ -57,21 +67,18 @@ $result = $conn->query(
                 box-shadow: 0 4px 10px rgba(0,0,0,0.08);
                 overflow: hidden;
             }
-            /* 調整 td 的排列，使用 flex 讓標題與內容對齊 */
             .mobile-card-table td {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 text-align: right;
-                padding: 1rem 1.2rem !important; /* 稍微放大平板/手機卡片的內邊距 */
+                padding: 1rem 1.2rem !important; 
                 border-bottom: 1px solid #f1f1f1 !important;
             }
-            /* 最後一個 td (訂單狀態) 特別處理 */
             .mobile-card-table td:last-child {
                 border-bottom: none !important;
-                background-color: #f8f9fa; /* 讓按鈕區域背景略有區隔 */
+                background-color: #f8f9fa; 
             }
-            /* 透過 CSS 自動讀取並顯示 data-label (左側標題) */
             .mobile-card-table td::before {
                 content: attr(data-label);
                 font-weight: bold;
@@ -79,7 +86,6 @@ $result = $conn->query(
                 flex-shrink: 0;
                 margin-right: 1rem;
             }
-            /* 針對佔版面較大的餐點明細與狀態列，改為垂直排列 */
             .mobile-card-table td.full-width-mobile {
                 flex-direction: column;
                 align-items: stretch;
@@ -91,7 +97,6 @@ $result = $conn->query(
             .mobile-card-table td.full-width-mobile .order-detail-box {
                 text-align: left !important;
             }
-            /* 按鈕容器的排版微調 */
             .action-wrapper {
                 display: flex;
                 justify-content: space-between;
@@ -109,13 +114,16 @@ $result = $conn->query(
     <div class="container py-4">
 
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold m-0"><i class="bi bi-receipt text-warning me-2"></i>訂單管理</h2>
-            <button class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm" onclick="location.reload()">
+            <div class="d-flex flex-column">
+                <h2 class="fw-bold m-0"><i class="bi bi-receipt text-warning me-2"></i>訂單管理</h2>
+                <small class="text-muted mt-1 ps-1">系統內累積數據：<?php echo number_format($total_records); ?> 筆 ｜ 當前分頁：第 <?php echo $page; ?> / <?php echo $total_pages; ?> 頁</small>
+            </div>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm align-self-start" onclick="location.reload()">
                 <i class="bi bi-arrow-clockwise me-1"></i>重整訂單
             </button>
         </div>
 
-        <div class="card shadow border-0">
+        <div class="card shadow border-0 mb-4">
             <div class="card-body p-md-4">
                 <div class="table-responsive border-0">
                     <table class="table table-hover align-middle mobile-card-table mb-0">
@@ -135,7 +143,7 @@ $result = $conn->query(
                         <tbody>
                             <?php while ($row = $result->fetch_assoc()): ?>
                                 <tr>
-                                    <td data-label="訂單編號"><?php echo $row['order_no']; ?></td>
+                                    <td data-label="訂單編號" class="fw-bold text-secondary"><?php echo $row['order_no']; ?></td>
                                     <td data-label="客戶姓名"><span class="fw-bold text-dark"><?php echo $row['customer_name']; ?></span></td>
                                     
                                     <td data-label="電話">
@@ -153,7 +161,7 @@ $result = $conn->query(
                                         </div>
                                     </td>
 
-                                    <td data-label="總金額" class="text-danger fw-bold fs-5">$<?php echo $row['total_price']; ?></td>
+                                    <td data-label="總金額" class="text-danger fw-bold fs-5">$<?php echo number_format($row['total_price']); ?></td>
 
                                     <td data-label="訂單狀態" class="full-width-mobile">
                                         <div class="action-wrapper">
@@ -164,9 +172,9 @@ $result = $conn->query(
                                                 echo '<a href="update_order.php?id=' . $row['id'] . '&status=已完成" class="btn btn-sm btn-success me-1 fw-bold shadow-sm">完成</a>';
                                                 echo '<a href="update_order.php?id=' . $row['id'] . '&status=已取消" class="btn btn-sm btn-danger fw-bold shadow-sm" onclick="return confirm(\'確定要取消此訂單嗎？\')">取消</a>';
                                                 echo '</div>';
-                                            } elseif ($row['status'] == '已完成') {
+                                            } elseif ($row['status'] == '已完成' || $row['status'] == '已取餐') {
                                                 echo '<span class="badge bg-success px-3 py-2 fs-6 shadow-sm">已完成</span>';
-                                            } elseif ($row['status'] == '已取消') {
+                                            } elseif ($row['status'] == '死鎖' || $row['status'] == '已取消') {
                                                 echo '<span class="badge bg-danger px-3 py-2 fs-6 shadow-sm">已取消</span>';
                                             } else {
                                                 echo '<span class="badge bg-secondary px-3 py-2 fs-6">' . $row['status'] . '</span>';
@@ -175,12 +183,37 @@ $result = $conn->query(
                                         </div>
                                     </td>
                                 </tr>
-                            <?php endwhile; ?>
+                            <?php endwhile; // 🌟 這裡已精準將原先出錯的 endforeach 改回 endwhile; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
+
+        <?php if ($total_pages > 1): ?>
+        <nav aria-label="Page navigation" class="mt-4">
+            <ul class="pagination pagination-sm justify-content-center flex-wrap gap-1">
+                <li class="page-item <?php if($page <= 1) echo 'disabled'; ?>">
+                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?page=1">&laquo; 首頁</a>
+                </li>
+                
+                <?php 
+                $start_loop = max(1, $page - 2);
+                $end_loop = min($total_pages, $page + 2);
+                for ($i = $start_loop; $i <= $end_loop; $i++): 
+                ?>
+                    <li class="page-item <?php if($page == $i) echo 'active'; ?>">
+                        <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+
+                <li class="page-item <?php if($page >= $total_pages) echo 'disabled'; ?>">
+                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?page=<?php echo $total_pages; ?>">末頁 &raquo;</a>
+                </li>
+            </ul>
+        </nav>
+        <?php endif; ?>
+
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

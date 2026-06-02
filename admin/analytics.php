@@ -1,0 +1,483 @@
+<?php
+require_once 'auth.php';
+require_once '../api/db.php'; // 確保有引入資料庫連線
+
+// 🔒 嚴格防禦：只有最高管理員 (admin) 才能查看大數據分析頁面
+if ($_SESSION['role'] !== 'admin') {
+    header('Location: dashboard.php');
+    exit();
+}
+
+$current_month = date('Y-m');
+$hot_products = [];
+$loyal_favorites = [];
+$walkin_favorites = [];
+$loyal_customers_detail = [];
+$chart_dates = [];  
+$chart_counts = []; 
+
+// 🌟 【全店大盤新增】：統計當月全店所有品項的銷售總數，用來畫大盤進貨分析圓餅圖
+$global_items_data = [];
+$global_items_query = $conn->query("
+    SELECT d.product_name, SUM(d.quantity) as total_qty
+    FROM order_detail d
+    JOIN order_master m ON d.order_no = m.order_no
+    WHERE m.pickup_date LIKE '$current_month%' AND m.status IN ('已完成', '已取餐')
+    GROUP BY d.product_name
+    ORDER BY total_qty DESC
+");
+while ($row = $global_items_query->fetch_assoc()) {
+    $global_items_data[$row['product_name']] = intval($row['total_qty']);
+}
+$global_items_json = json_encode($global_items_data, JSON_UNESCAPED_UNICODE);
+
+// 📊 1. 當月明星商品熱銷排行榜 (前5名)
+$hot_query = $conn->query("
+    SELECT d.product_name, SUM(d.quantity) as total_qty
+    FROM order_detail d
+    JOIN order_master m ON d.order_no = m.order_no
+    WHERE m.pickup_date LIKE '$current_month%' AND m.status IN ('已完成', '已取餐')
+    GROUP BY d.product_name
+    ORDER BY total_qty DESC
+    LIMIT 5
+");
+while ($row = $hot_query->fetch_assoc()) {
+    $hot_products[] = $row;
+}
+
+// 👥 2. 常客/熟客最愛購買商品前3名
+$loyal_query = $conn->query("
+    SELECT d.product_name, SUM(d.quantity) as total_qty
+    FROM order_detail d
+    JOIN order_master m ON d.order_no = m.order_no
+    WHERE m.status IN ('已完成', '已取餐') AND m.phone IN (
+        SELECT phone FROM order_master WHERE status IN ('已完成', '已取餐') GROUP BY phone HAVING COUNT(order_no) >= 2
+    )
+    GROUP BY d.product_name 
+    ORDER BY total_qty DESC 
+    LIMIT 3
+");
+while ($row = $loyal_query->fetch_assoc()) {
+    $loyal_favorites[] = $row;
+}
+
+// 🚶 3. 散客/新客最愛購買商品前3名
+$walkin_query = $conn->query("
+    SELECT d.product_name, SUM(d.quantity) as total_qty
+    FROM order_detail d
+    JOIN order_master m ON d.order_no = m.order_no
+    WHERE m.status IN ('已完成', '已取餐') AND m.phone IN (
+        SELECT phone FROM order_master WHERE status IN ('已完成', '已取餐') GROUP BY phone HAVING COUNT(order_no) = 1
+    )
+    GROUP BY d.product_name 
+    ORDER BY total_qty DESC 
+    LIMIT 3
+");
+while ($row = $walkin_query->fetch_assoc()) {
+    $walkin_favorites[] = $row;
+}
+
+// 🔍 4. 熟客消費習慣數據
+$loyal_base_query = $conn->query("
+    SELECT m.phone, COUNT(m.order_no) as total_orders,
+           GROUP_CONCAT(DISTINCT DATE_FORMAT(m.pickup_time, '%H:%i') ORDER BY m.pickup_time ASC SEPARATOR ', ') as visit_times
+    FROM order_master m
+    WHERE m.status IN ('已完成', '已取餐')
+    GROUP BY m.phone
+    HAVING total_orders >= 2
+    ORDER BY total_orders DESC
+");
+
+if ($loyal_base_query) {
+    while ($base = $loyal_base_query->fetch_assoc()) {
+        $phone = $base['phone'];
+        
+        $items_query = $conn->query("
+            SELECT d.product_name, SUM(d.quantity) as sum_qty
+            FROM order_detail d
+            JOIN order_master m ON d.order_no = m.order_no
+            WHERE m.phone = '$phone' AND m.status IN ('已完成', '已取餐')
+            GROUP BY d.product_name
+        ");
+        
+        $customer_pie_data = [];
+        while ($item = $items_query->fetch_assoc()) {
+            $customer_pie_data[$item['product_name']] = intval($item['sum_qty']);
+        }
+        
+        $loyal_customers_detail[] = [
+            'phone' => $phone,
+            'total_orders' => $base['total_orders'],
+            'visit_times' => $base['visit_times'],
+            'json_str' => json_encode($customer_pie_data, JSON_UNESCAPED_UNICODE)
+        ];
+    }
+}
+
+// 📈 5. 每日銷售波動峰圖數據
+$trend_query = $conn->query("
+    SELECT m.pickup_date, SUM(d.quantity) as daily_qty
+    FROM order_master m
+    JOIN order_detail d ON m.order_no = d.order_no
+    WHERE m.pickup_date LIKE '$current_month%' AND m.status IN ('已完成', '已取餐')
+    GROUP BY m.pickup_date
+    ORDER BY m.pickup_date ASC
+");
+while ($row = $trend_query->fetch_assoc()) {
+    $chart_dates[] = date('m/d', strtotime($row['pickup_date'])); 
+    $chart_counts[] = intval($row['daily_qty']);
+}
+?>
+<!DOCTYPE html>
+<html lang="zh-tw">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大數據經營分析中心 | 管理後台</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    body { background-color: #f8f9fa; font-family: 'PingFang TC', sans-serif; }
+    .loyal-item-btn { transition: background-color 0.2s; cursor: pointer; border: 1px solid #e2e8f0 !important; }
+    .loyal-item-btn:hover { background-color: #f8fafc !important; }
+    .time-badge { background-color: #f1f5f9; color: #475569; font-size: 0.82rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0; display: inline-block; }
+    @media (max-width: 576px) {
+        .card-body { padding: 1.15rem !important; }
+        .loyal-item-btn { padding: 0.9rem 0.65rem !important; }
+        .loyal-item-btn .fs-5 { font-size: 0.95rem !important; }
+        .pie-container { height: 210px !important; margin-bottom: 15px; }
+        .global-pie-box { height: 260px !important; }
+    }
+</style>
+</head>
+<body class="bg-light">
+
+<?php include 'navbar.php'; ?>
+
+<div class="container px-3 px-sm-4 py-4">
+    
+    <div class="row justify-content-center mb-3">
+        <div class="col-12 col-lg-10">
+            <nav aria-label="breadcrumb">
+              <ol class="breadcrumb mb-2 ps-1">
+                <li class="breadcrumb-item"><a href="dashboard.php" class="text-decoration-none">後台首頁</a></li>
+                <li class="breadcrumb-item active" aria-current="page">大數據經營分析</li>
+              </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4 justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-0">
+                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-activity text-danger me-2"></i>每日商品銷量市場走向圖</h5>
+                    <p class="text-muted small mb-0 mt-1">橫軸為日期，縱軸為餐點銷售總份數。</p>
+                </div>
+                <div class="card-body p-2 p-sm-4">
+                    <?php if (empty($chart_dates)): ?>
+                        <p class="text-muted small text-center py-5">尚無本月的銷售波動數據</p>
+                    <?php else: ?>
+                        <div><canvas id="marketTrendChart"></canvas></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4 justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-1">
+                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-pie-chart text-primary me-2"></i>當月全店品項銷量總比例圖（進貨決策參考）</h5>
+                    <p class="text-muted small mb-0 mt-1">整合全店整個月所有售出商品之佔比，右側標籤自動計算精確百分比，方便商家月底精準向原物料大盤商補貨。</p>
+                </div>
+                <div class="card-body p-3 p-sm-4">
+                    <?php if (empty($global_items_data)): ?>
+                        <p class="text-muted small text-center py-5">暫無本月全店銷售商品數據</p>
+                    <?php else: ?>
+                        <div class="global-pie-box" style="position: relative; height: 230px; width: 100%;">
+                            <canvas id="globalMarketPieChart"></canvas>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 g-sm-4 mb-4 justify-content-center">
+        <div class="col-12 col-sm-6 col-lg-5">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
+                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-fire text-danger me-2"></i>本月熱銷商品 (Top 5)</h5>
+                </div>
+                <div class="card-body px-3 px-sm-4 pb-4 pt-2">
+                    <div class="list-group list-group-flush">
+                        <?php foreach ($hot_products as $index => $item): ?>
+                            <div class="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
+                                <div>
+                                    <span class="badge rounded-circle bg-dark text-white me-2 d-inline-flex align-items-center justify-content-center" style="width: 20px; height: 20px; font-size: 0.72rem;"><?php echo $index + 1; ?></span>
+                                    <span class="fw-bold text-secondary" style="font-size: 0.9rem;"><?php echo $item['product_name']; ?></span>
+                                </div>
+                                <span class="badge rounded-pill bg-light text-dark border px-2 py-1 fw-bold small">售出 <?php echo $item['total_qty']; ?> 份</span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-5">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 15px;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
+                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-pie-chart-fill text-primary me-2"></i>往來客群偏好調查</h5>
+                </div>
+                <div class="card-body p-3 p-sm-4">
+                    <div class="mb-4">
+                        <h6 class="fw-bold text-primary mb-2" style="font-size: 0.88rem;"><i class="bi bi-heart-fill me-1"></i> 熟客最愛餐點 (回購&ge;2次)</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <?php foreach ($loyal_favorites as $lf): ?>
+                                <span class="badge border border-primary text-primary bg-white rounded-pill px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">👍 <?php echo $lf['product_name']; ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <hr class="text-muted my-3" style="opacity: 0.15;">
+                    <div>
+                        <h6 class="fw-bold text-success mb-2" style="font-size: 0.88rem;"><i class="bi bi-geo-alt-fill me-1"></i> 散客最愛餐點 (首次購買)</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <?php foreach ($walkin_favorites as $wf): ?>
+                                <span class="badge border border-success text-success bg-white rounded-pill px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">🚶 <?php echo $wf['product_name']; ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
+                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-person-lines-fill text-dark me-2"></i>熟客精準消費習慣動態追蹤面板</h5>
+                    <p class="text-muted small mt-1 mb-0">點擊熟客面板會向下流暢拉開，左側為「常吃商品份數比例圓餅圖（附帶精準 % 標籤）」，右側為「歷史到店取餐時間點」。</p>
+                </div>
+                <div class="card-body px-3 px-sm-4 pb-4 pt-2">
+                    <div class="list-group">
+                        <?php if (empty($loyal_customers_detail)): ?>
+                            <p class="text-muted small my-3 px-2">尚未累積符合回購條件的常客資料。</p>
+                        <?php else: ?>
+                            <?php foreach ($loyal_customers_detail as $idx => $cust): ?>
+                                <div class="list-group-item d-flex justify-content-between align-items-center bg-white rounded-3 mb-2 px-3 px-sm-4 py-3 loyal-item-btn shadow-sm" 
+                                     data-bs-toggle="collapse" 
+                                     data-bs-target="#loyal-detail-<?php echo $idx; ?>" 
+                                     aria-expanded="false">
+                                    <div class="d-flex align-items-center overflow-hidden me-2">
+                                        <i class="bi bi-telephone-outbound text-primary me-2 me-sm-3 fs-5"></i>
+                                        <span class="fw-bold text-dark fs-5"><?php echo $cust['phone']; ?></span>
+                                    </div>
+                                    <div class="text-end flex-shrink-0">
+                                        <span class="badge bg-danger rounded-pill px-2.5 py-1.5 fw-bold" style="font-size:0.8rem;"><?php echo $cust['total_orders']; ?> 次預約</span>
+                                        <i class="bi bi-chevron-down ms-1 text-secondary small"></i>
+                                    </div>
+                                </div>
+
+                                <div class="collapse mb-2 loyal-collapse" 
+                                     id="loyal-detail-<?php echo $idx; ?>"
+                                     data-json='<?php echo htmlspecialchars($cust['json_str'], ENT_QUOTES, 'UTF-8'); ?>'>
+                                    <div class="card card-body border-0 shadow-sm p-3 p-sm-4 bg-white" style="border-radius: 12px; border: 1px solid #e2e8f0 !important;">
+                                        <div class="row align-items-center">
+                                            <div class="col-12 col-md-6 pie-container" style="position: relative; height: 190px;">
+                                                <canvas id="pie-chart-<?php echo $idx; ?>"></canvas>
+                                            </div>
+                                            <div class="col-12 col-md-6 ps-md-3 mt-3 mt-md-0">
+                                                <div class="p-3 rounded-3 h-100" style="background-color: #f8fafc; border-left: 4px solid #6366f1;">
+                                                    <h6 class="fw-bold text-dark mb-2" style="font-size: 0.9rem;"><i class="bi bi-clock-history text-primary me-1"></i> 常客習慣取餐時間段：</h6>
+                                                    <div class="d-flex flex-wrap gap-1.5">
+                                                        <?php 
+                                                            $times_arr = explode(', ', $cust['visit_times']);
+                                                            foreach($times_arr as $t) {
+                                                                echo '<span class="time-badge mb-1 me-1"><i class="bi bi-alarm me-1 text-secondary"></i>' . $t . '</span>';
+                                                            }
+                                                        ?>
+                                                    </div>
+                                                    <div class="mt-3 small text-muted border-top pt-2">
+                                                        <i class="bi bi-lightbulb-fill text-warning me-1"></i> <b>經營建議：</b> 該熟客高度喜好左圖佔比最高之品項，建議在其常來時間段前 5 分鐘預先完成製作，達成秒速取餐體驗。
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // 1. 📈 主趨勢股票走向圖
+    const ctx = document.getElementById('marketTrendChart').getContext('2d');
+    const labelsData = <?php echo json_encode($chart_dates); ?>;
+    const salesData = <?php echo json_encode($chart_counts); ?>;
+    const isMobile = window.innerWidth < 576;
+    ctx.canvas.parentNode.style.height = isMobile ? '180px' : '260px';
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labelsData,
+            datasets: [{
+                label: '每日售出產品總件數',
+                data: salesData,
+                borderColor: '#ef4444',
+                borderWidth: isMobile ? 2 : 3, 
+                pointBackgroundColor: '#b91c1c',
+                pointRadius: isMobile ? 2 : 4,
+                tension: 0.3, 
+                fill: true, 
+                backgroundColor: (context) => {
+                    const chart = context.chart;
+                    const {ctx, chartArea} = chart;
+                    if (!chartArea) return null;
+                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                    gradient.addColorStop(0, 'rgba(239, 68, 68, 0.22)');
+                    gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
+                    return gradient;
+                }
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: isMobile ? 9 : 11 }, maxRotation: 0 } },
+                y: { beginAtZero: true, grid: { color: '#e2e8f0', drawBorder: false }, ticks: { color: '#64748b', font: { size: isMobile ? 9 : 11 }, stepSize: isMobile ? 10 : 5 } }
+            }
+        }
+    });
+
+    // 🌟 2. 【全新大盤圖表引擎】：一進網頁就渲染，動態整合全店銷量與進貨百分比 (%)
+    <?php if (!empty($global_items_data)): ?>
+    const globalCtx = document.getElementById('globalMarketPieChart').getContext('2d');
+    const globalDataObj = <?php echo $global_items_json; ?>;
+    const globalLabels = Object.keys(globalDataObj);
+    const globalValues = Object.values(globalDataObj);
+    const globalTotalSum = globalValues.reduce((a, b) => a + b, 0);
+
+    new Chart(globalCtx, {
+        type: 'pie',
+        data: {
+            labels: globalLabels,
+            datasets: [{
+                data: globalValues,
+                backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b'],
+                borderWidth: 1,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12,
+                        padding: isMobile ? 6 : 10,
+                        font: { size: isMobile ? 10 : 12, weight: 'bold' },
+                        color: '#1e293b',
+                        generateLabels: function(chart) {
+                            return chart.data.labels.map(function(label, i) {
+                                const val = chart.data.datasets[0].data[i];
+                                const percent = ((val / globalTotalSum) * 100).toFixed(1);
+                                return {
+                                    text: `${label} : 已售 ${val} 份 (${percent}%)`,
+                                    fillStyle: chart.data.datasets[0].backgroundColor[i],
+                                    strokeStyle: '#ffffff',
+                                    lineWidth: 1,
+                                    index: i
+                                };
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    });
+    <?php endif; ?>
+
+    // 3. 🎨 動態熟客個體圓餅圖引擎
+    document.querySelectorAll('.loyal-collapse').forEach((element) => {
+        element.addEventListener('shown.bs.collapse', function (event) {
+            const collapseId = this.getAttribute('id');
+            const idx = collapseId.replace('loyal-detail-', '');
+            const canvasId = 'pie-chart-' + idx;
+            const canvasObj = document.getElementById(canvasId);
+            
+            if (canvasObj.classList.contains('chart-built')) {
+                return;
+            }
+
+            const rawJson = this.getAttribute('data-json');
+            const productData = JSON.parse(rawJson);
+
+            const labels = Object.keys(productData);
+            const dataValues = Object.values(productData);
+            const totalSum = dataValues.reduce((a, b) => a + b, 0);
+
+            const pieCtx = canvasObj.getContext('2d');
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#64748b'],
+                        borderWidth: 1,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 10,
+                                padding: 8,
+                                font: { size: window.innerWidth < 576 ? 10 : 11, weight: 'bold' },
+                                color: '#334155',
+                                generateLabels: function(chart) {
+                                    return chart.data.labels.map(function(label, i) {
+                                        const value = chart.data.datasets[0].data[i];
+                                        const percentage = ((value / totalSum) * 100).toFixed(1);
+                                        return {
+                                            text: `${label} (${percentage}%)`,
+                                            fillStyle: chart.data.datasets[0].backgroundColor[i],
+                                            strokeStyle: '#ffffff',
+                                            lineWidth: 1,
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            canvasObj.classList.add('chart-built');
+        });
+    });
+</script>
+</body>
+</html>
