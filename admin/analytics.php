@@ -15,7 +15,7 @@ $loyal_customers_detail = [];
 $chart_dates = [];  
 $chart_counts = []; 
 
-// 🌟 全店大盤進貨分析
+// 🌟 1. 全店大盤進貨分析
 $global_items_data = [];
 $global_items_query = $conn->query("
     SELECT d.product_name, SUM(d.quantity) as total_qty
@@ -30,7 +30,7 @@ while ($row = $global_items_query->fetch_assoc()) {
 }
 $global_items_json = json_encode($global_items_data, JSON_UNESCAPED_UNICODE);
 
-// 📊 1. 當月明星商品熱銷排行榜
+// 📊 2. 當月明星商品熱銷排行榜
 $hot_query = $conn->query("
     SELECT d.product_name, SUM(d.quantity) as total_qty
     FROM order_detail d
@@ -44,7 +44,7 @@ while ($row = $hot_query->fetch_assoc()) {
     $hot_products[] = $row;
 }
 
-// 👥 2. 常客最愛與散客最愛
+// 👥 3. 常客最愛與散客最愛
 $loyal_query = $conn->query("
     SELECT d.product_name, SUM(d.quantity) as total_qty FROM order_detail d JOIN order_master m ON d.order_no = m.order_no
     WHERE m.status IN ('已完成', '已取餐') AND m.phone IN (SELECT phone FROM order_master WHERE status IN ('已完成', '已取餐') GROUP BY phone HAVING COUNT(order_no) >= 2)
@@ -60,7 +60,24 @@ $walkin_query = $conn->query("
 while ($row = $walkin_query->fetch_assoc()) { $walkin_favorites[] = $row; }
 
 
-// 🔍 3. 【核心演算法大重構】：撈取熟客基本資料，並在 PHP 層利用「15分鐘時鐘矩陣」進行降維歸類
+// 🔍 4. 【熟客面板高效能分頁優化核心】
+$loyal_limit = 7; // 👈 設定每頁只顯示 7 筆熟客資料，兼顧視覺美觀與操作流暢度
+$loyal_page = isset($_GET['loyal_page']) && is_numeric($_GET['loyal_page']) ? intval($_GET['loyal_page']) : 1;
+if ($loyal_page < 1) $loyal_page = 1;
+$loyal_offset = ($loyal_page - 1) * $loyal_limit;
+
+// 算出一共有多少位合格的熟客
+$count_loyal_query = $conn->query("
+    SELECT COUNT(DISTINCT m.phone) as total_vips
+    FROM order_master m
+    WHERE m.status IN ('已完成', '已取餐')
+    GROUP BY m.phone
+    HAVING COUNT(m.order_no) >= 2
+");
+$total_loyal_records = $count_loyal_query ? $count_loyal_query->num_rows : 0;
+$total_loyal_pages = ceil($total_loyal_records / $loyal_limit);
+
+// 精準撈取當前分頁區間的熟客
 $loyal_base_query = $conn->query("
     SELECT m.phone, COUNT(m.order_no) as total_orders
     FROM order_master m
@@ -68,13 +85,14 @@ $loyal_base_query = $conn->query("
     GROUP BY m.phone
     HAVING total_orders >= 2
     ORDER BY total_orders DESC
+    LIMIT $loyal_limit OFFSET $loyal_offset
 ");
 
 if ($loyal_base_query) {
     while ($base = $loyal_base_query->fetch_assoc()) {
         $phone = $base['phone'];
         
-        // 🕒 撈取該常客的所有點餐原始時間點
+        // 🕒 15分鐘時鐘矩陣去噪降維
         $time_query = $conn->query("SELECT pickup_time FROM order_master WHERE phone = '$phone' AND status IN ('已完成', '已取餐')");
         $intervals = [];
         
@@ -84,34 +102,25 @@ if ($loyal_base_query) {
             $hour = intval($parts[0]);
             $minute = intval($parts[1]);
             
-            // 🌟 15分鐘區間化核心數學算式
-            if ($minute >= 0 && $minute <= 15) {
-                $start = "00"; $end = "15";
-            } elseif ($minute >= 16 && $minute <= 30) {
-                $start = "15"; $end = "30";
-            } elseif ($minute >= 31 && $minute <= 45) {
-                $start = "30"; $end = "45";
-            } else {
-                $start = "45"; $end = "00";
-            }
+            if ($minute >= 0 && $minute <= 15) { $start = "00"; $end = "15"; }
+            elseif ($minute >= 16 && $minute <= 30) { $start = "15"; $end = "30"; }
+            elseif ($minute >= 31 && $minute <= 45) { $start = "30"; $end = "45"; }
+            else { $start = "45"; $end = "00"; }
             
-            // 處理跨鐘點進位（例如 07:55 歸類在 07:45~08:00）
             if ($start == "45" && $end == "00") {
                 $next_hour = $hour + 1;
                 $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":45 ~ " . str_pad($next_hour, 2, '0', STR_PAD_LEFT) . ":00";
             } else {
                 $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $start . " ~ " . str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $end;
             }
-            
             $intervals[] = $interval_label;
         }
         
-        // 去除重複的區間，並依照時間先後順序排序
         $intervals = array_unique($intervals);
         sort($intervals);
         $final_intervals_str = implode(', ', $intervals);
 
-        // 撈取品項圓餅圖數據
+        // 撈取餐點偏好
         $items_query = $conn->query("
             SELECT d.product_name, SUM(d.quantity) as sum_qty
             FROM order_detail d JOIN order_master m ON d.order_no = m.order_no
@@ -127,13 +136,13 @@ if ($loyal_base_query) {
         $loyal_customers_detail[] = [
             'phone' => $phone,
             'total_orders' => $base['total_orders'],
-            'visit_intervals' => $final_intervals_str, // 👈 換成乾淨的區間標籤
+            'visit_intervals' => $final_intervals_str,
             'json_str' => json_encode($customer_pie_data, JSON_UNESCAPED_UNICODE)
         ];
     }
 }
 
-// 📈 每日銷售波動
+// 📈 5. 每日銷售波動
 $trend_query = $conn->query("
     SELECT m.pickup_date, SUM(d.quantity) as daily_qty FROM order_master m JOIN order_detail d ON m.order_no = d.order_no
     WHERE m.pickup_date LIKE '$current_month%' AND m.status IN ('已完成', '已取餐') GROUP BY m.pickup_date ORDER BY m.pickup_date ASC
@@ -272,7 +281,13 @@ while ($row = $trend_query->fetch_assoc()) {
         <div class="col-12 col-lg-10">
             <div class="card border-0 shadow-sm" style="border-radius: 15px;">
                 <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
-                    <h5 class="fw-bold text-dark m-0"><i class="bi bi-person-lines-fill text-dark me-2"></i>熟客精準消費習慣動態追蹤面板</h5>
+                    <div class="d-flex justify-content-between align-items-start align-items-sm-center flex-column flex-sm-row">
+                        <div>
+                            <h5 class="fw-bold text-dark m-0"><i class="bi bi-person-lines-fill text-dark me-2"></i>熟客精準消費習慣動態追蹤面板</h5>
+                            <small class="text-muted ps-1">高回購常客總計：<?php echo $total_loyal_records; ?> 位</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill mt-2 mt-sm-0 px-3 py-1.5 smallfw-bold">第 <?php echo $loyal_page; ?> / <?php echo $total_loyal_pages; ?> 頁</span>
+                    </div>
                 </div>
                 <div class="card-body px-3 px-sm-4 pb-4 pt-2">
                     <div class="list-group">
@@ -324,6 +339,31 @@ while ($row = $trend_query->fetch_assoc()) {
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </div>
+
+                    <?php if ($total_loyal_pages > 1): ?>
+                    <nav aria-label="Loyal panel navigation" class="mt-4">
+                        <ul class="pagination pagination-sm justify-content-center flex-wrap gap-1 mb-0">
+                            <li class="page-item <?php if($loyal_page <= 1) echo 'disabled'; ?>">
+                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=1">&laquo; 首頁</a>
+                            </li>
+                            
+                            <?php 
+                            $start_loop = max(1, $loyal_page - 2);
+                            $end_loop = min($total_loyal_pages, $loyal_page + 2);
+                            for ($i = $start_loop; $i <= $end_loop; $i++): 
+                            ?>
+                                <li class="page-item <?php if($loyal_page == $i) echo 'active'; ?>">
+                                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                </li>
+                            <?php endfor; ?>
+
+                            <li class="page-item <?php if($loyal_page >= $total_loyal_pages) echo 'disabled'; ?>">
+                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $total_loyal_pages; ?>">末頁 &raquo;</a>
+                            </li>
+                        </ul>
+                    </nav>
+                    <?php endif; ?>
+
                 </div>
             </div>
         </div>
@@ -420,7 +460,7 @@ while ($row = $trend_query->fetch_assoc()) {
     });
     <?php endif; ?>
 
-    // 3. 動態熟客圓餅圖（百分比優化版）
+    // 3. 動態熟客圓餅圖（百分比優化 + 異步隔離綁定）
     document.querySelectorAll('.loyal-collapse').forEach((element) => {
         element.addEventListener('shown.bs.collapse', function (event) {
             const collapseId = this.getAttribute('id');
