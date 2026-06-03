@@ -1,0 +1,1 @@
+<?php echo password_hash('你想要的密碼明文', PASSWORD_BCRYPT); ?>
