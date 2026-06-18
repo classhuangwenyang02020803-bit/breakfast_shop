@@ -1,6 +1,7 @@
 <?php
+// 檔案位置：admin/analytics.php
 require_once 'auth.php';
-require_once '../api/db.php'; 
+require_once '../api/db.php'; // 🌟 順從你的需求：完全改回原本的檔案路徑，保證不跳 No such file
 
 if ($_SESSION['role'] !== 'admin') {
     header('Location: dashboard.php');
@@ -25,8 +26,10 @@ $global_items_query = $conn->query("
     GROUP BY d.product_name
     ORDER BY total_qty DESC
 ");
-while ($row = $global_items_query->fetch_assoc()) {
-    $global_items_data[$row['product_name']] = intval($row['total_qty']);
+if ($global_items_query) {
+    while ($row = $global_items_query->fetch_assoc()) {
+        $global_items_data[$row['product_name']] = intval($row['total_qty']);
+    }
 }
 $global_items_json = json_encode($global_items_data, JSON_UNESCAPED_UNICODE);
 
@@ -40,8 +43,10 @@ $hot_query = $conn->query("
     ORDER BY total_qty DESC
     LIMIT 5
 ");
-while ($row = $hot_query->fetch_assoc()) {
-    $hot_products[] = $row;
+if ($hot_query) {
+    while ($row = $hot_query->fetch_assoc()) {
+        $hot_products[] = $row;
+    }
 }
 
 // 👥 3. 常客最愛與散客最愛
@@ -50,38 +55,36 @@ $loyal_query = $conn->query("
     WHERE m.status IN ('已完成', '已取餐') AND m.phone IN (SELECT phone FROM order_master WHERE status IN ('已完成', '已取餐') GROUP BY phone HAVING COUNT(order_no) >= 2)
     GROUP BY d.product_name ORDER BY total_qty DESC LIMIT 3
 ");
-while ($row = $loyal_query->fetch_assoc()) { $loyal_favorites[] = $row; }
+if ($loyal_query) { while ($row = $loyal_query->fetch_assoc()) { $loyal_favorites[] = $row; } }
 
 $walkin_query = $conn->query("
     SELECT d.product_name, SUM(d.quantity) as total_qty FROM order_detail d JOIN order_master m ON d.order_no = m.order_no
     WHERE m.status IN ('已完成', '已取餐') AND m.phone IN (SELECT phone FROM order_master WHERE status IN ('已完成', '已取餐') GROUP BY phone HAVING COUNT(order_no) = 1)
     GROUP BY d.product_name ORDER BY total_qty DESC LIMIT 3
 ");
-while ($row = $walkin_query->fetch_assoc()) { $walkin_favorites[] = $row; }
+if ($walkin_query) { while ($row = $walkin_query->fetch_assoc()) { $walkin_favorites[] = $row; } }
 
 
 // 🔍 4. 【熟客面板高效能分頁優化核心】
-$loyal_limit = 7; // 👈 設定每頁只顯示 7 筆熟客資料，兼顧視覺美觀與操作流暢度
+$loyal_limit = 7; 
 $loyal_page = isset($_GET['loyal_page']) && is_numeric($_GET['loyal_page']) ? intval($_GET['loyal_page']) : 1;
 if ($loyal_page < 1) $loyal_page = 1;
 $loyal_offset = ($loyal_page - 1) * $loyal_limit;
 
-// 算出一共有多少位合格的熟客
 $count_loyal_query = $conn->query("
     SELECT COUNT(DISTINCT m.phone) as total_vips
     FROM order_master m
-    WHERE m.status IN ('已完成', '已取餐')
+    WHERE m.status IN ('Alice已完成', '已完成', '已取餐')
     GROUP BY m.phone
     HAVING COUNT(m.order_no) >= 2
 ");
 $total_loyal_records = $count_loyal_query ? $count_loyal_query->num_rows : 0;
 $total_loyal_pages = ceil($total_loyal_records / $loyal_limit);
 
-// 精準撈取當前分頁區間的熟客
 $loyal_base_query = $conn->query("
     SELECT m.phone, COUNT(m.order_no) as total_orders
     FROM order_master m
-    WHERE m.status IN ('已完成', '已取餐')
+    WHERE m.status IN ('Alice已完成', '已完成', '已取餐')
     GROUP BY m.phone
     HAVING total_orders >= 2
     ORDER BY total_orders DESC
@@ -92,45 +95,47 @@ if ($loyal_base_query) {
     while ($base = $loyal_base_query->fetch_assoc()) {
         $phone = $base['phone'];
         
-        // 🕒 15分鐘時鐘矩陣去噪降維
-        $time_query = $conn->query("SELECT pickup_time FROM order_master WHERE phone = '$phone' AND status IN ('已完成', '已取餐')");
+        $time_query = $conn->query("SELECT pickup_time FROM order_master WHERE phone = '$phone' AND status IN ('Alice已完成', '已完成', '已取餐')");
         $intervals = [];
         
-        while ($t_row = $time_query->fetch_assoc()) {
-            $time_str = $t_row['pickup_time'];
-            $parts = explode(':', $time_str);
-            $hour = intval($parts[0]);
-            $minute = intval($parts[1]);
-            
-            if ($minute >= 0 && $minute <= 15) { $start = "00"; $end = "15"; }
-            elseif ($minute >= 16 && $minute <= 30) { $start = "15"; $end = "30"; }
-            elseif ($minute >= 31 && $minute <= 45) { $start = "30"; $end = "45"; }
-            else { $start = "45"; $end = "00"; }
-            
-            if ($start == "45" && $end == "00") {
-                $next_hour = $hour + 1;
-                $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":45 ~ " . str_pad($next_hour, 2, '0', STR_PAD_LEFT) . ":00";
-            } else {
-                $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $start . " ~ " . str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $end;
+        if ($time_query) {
+            while ($t_row = $time_query->fetch_assoc()) {
+                $time_str = $t_row['pickup_time'];
+                $parts = explode(':', $time_str);
+                $hour = intval($parts[0]);
+                $minute = intval($parts[1]);
+                
+                if ($minute >= 0 && $minute <= 15) { $start = "00"; $end = "15"; }
+                elseif ($minute >= 16 && $minute <= 30) { $start = "15"; $end = "30"; }
+                elseif ($minute >= 31 && $minute <= 45) { $start = "30"; $end = "45"; }
+                else { $start = "45"; $end = "00"; }
+                
+                if ($start == "45" && $end == "00") {
+                    $next_hour = $hour + 1;
+                    $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":45 ~ " . str_pad($next_hour, 2, '0', STR_PAD_LEFT) . ":00";
+                } else {
+                    $interval_label = str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $start . " ~ " . str_pad($hour, 2, '0', STR_PAD_LEFT) . ":" . $end;
+                }
+                $intervals[] = $interval_label;
             }
-            $intervals[] = $interval_label;
         }
         
         $intervals = array_unique($intervals);
         sort($intervals);
         $final_intervals_str = implode(', ', $intervals);
 
-        // 撈取餐點偏好
         $items_query = $conn->query("
             SELECT d.product_name, SUM(d.quantity) as sum_qty
             FROM order_detail d JOIN order_master m ON d.order_no = m.order_no
-            WHERE m.phone = '$phone' AND m.status IN ('已完成', '已取餐')
+            WHERE m.phone = '$phone' AND m.status IN ('Alice已完成', '已完成', '已取餐')
             GROUP BY d.product_name
         ");
         
         $customer_pie_data = [];
-        while ($item = $items_query->fetch_assoc()) {
-            $customer_pie_data[$item['product_name']] = intval($item['sum_qty']);
+        if ($items_query) {
+            while ($item = $items_query->fetch_assoc()) {
+                $customer_pie_data[$item['product_name']] = intval($item['sum_qty']);
+            }
         }
         
         $loyal_customers_detail[] = [
@@ -147,8 +152,35 @@ $trend_query = $conn->query("
     SELECT m.pickup_date, SUM(d.quantity) as daily_qty FROM order_master m JOIN order_detail d ON m.order_no = d.order_no
     WHERE m.pickup_date LIKE '$current_month%' AND m.status IN ('已完成', '已取餐') GROUP BY m.pickup_date ORDER BY m.pickup_date ASC
 ");
-while ($row = $trend_query->fetch_assoc()) {
-    $chart_dates[] = date('m/d', strtotime($row['pickup_date'])); $chart_counts[] = intval($row['daily_qty']);
+if ($trend_query) {
+    while ($row = $trend_query->fetch_assoc()) {
+        $chart_dates[] = date('m/d', strtotime($row['pickup_date'])); $chart_counts[] = intval($row['daily_qty']);
+    }
+}
+
+// 🛡️ 6. 【黑名單面板高效能分頁後端引擎 (累積 3 次未取單)】
+$black_limit = 5; 
+$black_page = isset($_GET['black_page']) && is_numeric($_GET['black_page']) ? intval($_GET['black_page']) : 1;
+if ($black_page < 1) $black_page = 1;
+$black_offset = ($black_page - 1) * $black_limit;
+
+// 算出一共有多少位列入黑名單的風險帳號
+$count_black_query = $conn->query("SELECT COUNT(*) as total_blacks FROM blacklist_table");
+$total_black_records = $count_black_query ? $count_black_query->fetch_assoc()['total_blacks'] : 0;
+$total_black_pages = ceil($total_black_records / $black_limit);
+
+// 高效能分頁撈取實體黑名單資料
+$blacklist_list = [];
+$black_res = $conn->query("
+    SELECT phone_number, ban_reason, ban_date 
+    FROM blacklist_table 
+    ORDER BY ban_date DESC 
+    LIMIT $black_limit OFFSET $black_offset
+");
+if ($black_res) {
+    while ($b_row = $black_res->fetch_assoc()) {
+        $blacklist_list[] = $b_row;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -277,7 +309,7 @@ while ($row = $trend_query->fetch_assoc()) {
         </div>
     </div>
 
-    <div class="row justify-content-center">
+    <div class="row justify-content-center mb-4">
         <div class="col-12 col-lg-10">
             <div class="card border-0 shadow-sm" style="border-radius: 15px;">
                 <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
@@ -286,7 +318,7 @@ while ($row = $trend_query->fetch_assoc()) {
                             <h5 class="fw-bold text-dark m-0"><i class="bi bi-person-lines-fill text-dark me-2"></i>熟客精準消費習慣動態追蹤面板</h5>
                             <small class="text-muted ps-1">高回購常客總計：<?php echo $total_loyal_records; ?> 位</small>
                         </div>
-                        <span class="badge bg-primary rounded-pill mt-2 mt-sm-0 px-3 py-1.5 smallfw-bold">第 <?php echo $loyal_page; ?> / <?php echo $total_loyal_pages; ?> 頁</span>
+                        <span class="badge bg-primary rounded-pill mt-2 mt-sm-0 px-3 py-1.5 small fw-bold">熟客 第 <?php echo $loyal_page; ?> / <?php echo $total_loyal_pages; ?> 頁</span>
                     </div>
                 </div>
                 <div class="card-body px-3 px-sm-4 pb-4 pt-2">
@@ -344,26 +376,85 @@ while ($row = $trend_query->fetch_assoc()) {
                     <nav aria-label="Loyal panel navigation" class="mt-4">
                         <ul class="pagination pagination-sm justify-content-center flex-wrap gap-1 mb-0">
                             <li class="page-item <?php if($loyal_page <= 1) echo 'disabled'; ?>">
-                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=1">&laquo; 首頁</a>
+                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=1&black_page=<?php echo $black_page; ?>">&laquo; 首頁</a>
                             </li>
-                            
                             <?php 
                             $start_loop = max(1, $loyal_page - 2);
                             $end_loop = min($total_loyal_pages, $loyal_page + 2);
                             for ($i = $start_loop; $i <= $end_loop; $i++): 
                             ?>
                                 <li class="page-item <?php if($loyal_page == $i) echo 'active'; ?>">
-                                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $i; ?>&black_page=<?php echo $black_page; ?>"><?php echo $i; ?></a>
                                 </li>
                             <?php endfor; ?>
-
                             <li class="page-item <?php if($loyal_page >= $total_loyal_pages) echo 'disabled'; ?>">
-                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $total_loyal_pages; ?>">末頁 &raquo;</a>
+                                <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold" href="?loyal_page=<?php echo $total_loyal_pages; ?>&black_page=<?php echo $black_page; ?>">末頁 &raquo;</a>
                             </li>
                         </ul>
                     </nav>
                     <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-10">
+            <div class="card border-0 shadow-sm" style="border-radius: 15px; border-left: 5px solid #dc3545 !important;">
+                <div class="card-header border-0 bg-white pt-4 px-3 px-sm-4 pb-2">
+                    <div class="d-flex justify-content-between align-items-start align-items-sm-center flex-column flex-sm-row">
+                        <div>
+                            <h5 class="fw-bold text-danger m-0"><i class="bi bi-shield-slash-fill me-2"></i>誠信風控：黑名冊資料庫管理面板</h5>
+                            <small class="text-muted ps-1">風控系統捕獲之風險黑名單總計：<?php echo $total_black_records; ?> 位 (累積 3 次以上惡意棄單)</small>
+                        </div>
+                        <span class="badge bg-danger rounded-pill mt-2 mt-sm-0 px-3 py-1.5 small fw-bold">風控 第 <?php echo $black_page; ?> / <?php echo $total_black_pages; ?> 頁</span>
+                    </div>
+                </div>
+                <div class="card-body px-3 px-sm-4 pb-4 pt-2">
+                    <?php if (empty($blacklist_list)): ?>
+                        <div class="text-center py-4 text-muted small">
+                            <i class="bi bi-check-circle text-success fs-3 d-block mb-2"></i>目前店內數據健全，資料庫暫無觸發 3 次棄單封鎖線的帳號。
+                        </div>
+                    <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle border-start border-end" style="font-size: 0.9rem;">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th scope="col" class="ps-3" style="width: 25%;">高風險電話</th>
+                                        <th scope="col" style="width: 50%;">風控系統自動判定原因</th>
+                                        <th scope="col" class="pe-3" style="width: 25%;">封鎖鎖定時間</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($blacklist_list as $bad_user): ?>
+                                        <tr class="table-danger" style="--bs-table-bg: #fff5f5;">
+                                            <td class="fw-bold text-danger ps-3"><i class="bi bi-telephone-x-fill me-1.5"></i><?php echo $bad_user['phone_number']; ?></td>
+                                            <td class="text-secondary small fw-bold"><?php echo $bad_user['ban_reason']; ?></td>
+                                            <td class="text-muted small pe-3"><?php echo $bad_user['ban_date']; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <?php if ($total_black_pages > 1): ?>
+                        <nav aria-label="Blacklist navigation" class="mt-3">
+                            <ul class="pagination pagination-sm justify-content-center flex-wrap gap-1 mb-0">
+                                <li class="page-item <?php if($black_page <= 1) echo 'disabled'; ?>">
+                                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm text-danger fw-bold" href="?loyal_page=<?php echo $loyal_page; ?>&black_page=1">&laquo; 首頁</a>
+                                </li>
+                                <?php for ($j = max(1, $black_page - 2); $j <= min($total_black_pages, $black_page + 2); $j++): ?>
+                                    <li class="page-item <?php if($black_page == $j) echo 'active'; ?>">
+                                        <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm fw-bold <?php echo ($black_page == $j) ? 'bg-danger text-white' : 'text-danger'; ?>" href="?loyal_page=<?php echo $loyal_page; ?>&black_page=<?php echo $j; ?>"><?php echo $j; ?></a>
+                                    </li>
+                                <?php endfor; ?>
+                                <li class="page-item <?php if($black_page >= $total_black_pages) echo 'disabled'; ?>">
+                                    <a class="page-link rounded-3 border-0 px-3 py-2 shadow-sm text-danger fw-bold" href="?loyal_page=<?php echo $loyal_page; ?>&black_page=<?php echo $total_black_pages; ?>">末頁 &raquo;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -460,7 +551,7 @@ while ($row = $trend_query->fetch_assoc()) {
     });
     <?php endif; ?>
 
-    // 3. 動態熟客圓餅圖（百分比優化 + 異步隔離綁定）
+    // 3. 動態熟客圓餅圖
     document.querySelectorAll('.loyal-collapse').forEach((element) => {
         element.addEventListener('shown.bs.collapse', function (event) {
             const collapseId = this.getAttribute('id');
